@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Xadrez vs Stockfish</title>
+
+<style>
+body {
+  background: #222;
+  color: white;
+  font-family: Arial;
+  text-align: center;
+}
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(8, 70px);
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.square {
+  width: 70px;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
+  cursor: pointer;
+}
+
+.light { background: #eeeed2; }
+.dark { background: #769656; }
+
+.selected {
+  outline: 3px solid yellow;
+}
+</style>
+</head>
+
+<body>
+
+<h2>♟️ Xadrez vs Stockfish</h2>
+<div id="board"></div>
+<p id="status">Carregando...</p>
+
+<!-- chess.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+<script>
+const game = new Chess();
+const boardEl = document.getElementById("board");
+const statusEl = document.getElementById("status");
+
+const P = {
+  p:"♟", r:"♜", n:"♞", b:"♝", q:"♛", k:"♚",
+  P:"♙", R:"♖", N:"♘", B:"♗", Q:"♕", K:"♔"
+};
+
+let selected = null;
+
+// 🔥 Stockfish funcionando (CDN confiável)
+const stockfish = new Worker("https://unpkg.com/stockfish.js@10.0.2/stockfish.js");
+
+stockfish.onmessage = function(e){
+  if(e.data.startsWith("bestmove")){
+    let move = e.data.split(" ")[1];
+    game.move({
+      from: move.slice(0,2),
+      to: move.slice(2,4),
+      promotion: "q"
+    });
+    draw();
+    statusEl.textContent = "Sua vez";
+  }
+};
+
+function draw(){
+  boardEl.innerHTML = "";
+  const s = game.board();
+
+  for(let y=0;y<8;y++){
+    for(let x=0;x<8;x++){
+      let d = document.createElement("div");
+      d.className = "square " + ((x+y)%2 ? "dark" : "light");
+
+      let p = s[y][x];
+      if(p){
+        let k = p.color==="w"?p.type.toUpperCase():p.type;
+        d.textContent = P[k];
+      }
+
+      if(selected && selected.x===x && selected.y===y){
+        d.classList.add("selected");
+      }
+
+      d.onclick = () => click(x,y);
+      boardEl.appendChild(d);
+    }
+  }
+}
+
+function click(x,y){
+  const square = "abcdefgh"[x] + (8-y);
+
+  if(selected){
+    const from = "abcdefgh"[selected.x] + (8-selected.y);
+
+    let move = game.move({
+      from: from,
+      to: square,
+      promotion: "q"
+    });
+
+    selected = null;
+    draw();
+
+    if(move){
+      statusEl.textContent = "Bot pensando...";
+      setTimeout(botMove, 200);
+    }
+
+  } else {
+    let piece = game.get(square);
+    if(piece && piece.color === "w"){
+      selected = {x,y};
+      draw();
+    }
+  }
+}
+
+function botMove(){
+  stockfish.postMessage("position fen " + game.fen());
+  stockfish.postMessage("go depth 12");
+}
+
+statusEl.textContent = "Sua vez (brancas)";
+draw();
+</script>
+
+</body>
+</html>
