@@ -60,7 +60,7 @@ const P = {
 let selected = null;
 
 // 🔥 Stockfish funcionando (CDN confiável)
-const stockfish = new Worker("https://unpkg.com/stockfish.js@10.0.2/stockfish.js");
+const stockfish = new Worker("stockfish.js")
 
 stockfish.onmessage = function(e){
   if(e.data.startsWith("bestmove")){
