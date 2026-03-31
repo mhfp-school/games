@@ -25,8 +25,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 38px;
   cursor: pointer;
+}
+
+.square img {
+  width: 55px;
+  height: 55px;
 }
 
 .light { background: #eeeed2; }
@@ -35,9 +39,6 @@ body {
 .selected {
   outline: 3px solid yellow;
 }
-
-.white-piece { color: white; }
-.black-piece { color: black; }
 </style>
 </head>
 
@@ -54,9 +55,21 @@ const game = new Chess();
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
 
-const P = {
-  p:"♟", r:"♜", n:"♞", b:"♝", q:"♛", k:"♚",
-  P:"♙", R:"♖", N:"♘", B:"♗", Q:"♕", K:"♔"
+// peças em SVG (Wikipedia)
+const IMG = {
+  wp: "https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg",
+  wr: "https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg",
+  wn: "https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg",
+  wb: "https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg",
+  wq: "https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg",
+  wk: "https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg",
+
+  bp: "https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg",
+  br: "https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg",
+  bn: "https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg",
+  bb: "https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg",
+  bq: "https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg",
+  bk: "https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg"
 };
 
 let selected = null;
@@ -87,15 +100,10 @@ function draw(){
 
       let p = s[y][x];
       if(p){
-        let k = p.color==="w"?p.type.toUpperCase():p.type;
-        d.textContent = P[k];
-
-        // cor das peças
-        if(p.color === "w"){
-          d.classList.add("white-piece");
-        } else {
-          d.classList.add("black-piece");
-        }
+        let key = p.color + p.type; // ex: wp, bk
+        let img = document.createElement("img");
+        img.src = IMG[key];
+        d.appendChild(img);
       }
 
       if(selected && selected.x===x && selected.y===y){
@@ -111,55 +119,4 @@ function draw(){
 function click(x,y){
   const square = "abcdefgh"[x] + (8-y);
 
-  if(selected){
-    const from = "abcdefgh"[selected.x] + (8-selected.y);
-
-    let move = game.move({
-      from: from,
-      to: square,
-      promotion: "q"
-    });
-
-    selected = null;
-    draw();
-
-    if(move){
-      checkGameState();
-      if(!game.game_over()){
-        statusEl.textContent = "Bot pensando...";
-        setTimeout(botMove, 200);
-      }
-    }
-
-  } else {
-    let piece = game.get(square);
-    if(piece && piece.color === "w"){
-      selected = {x,y};
-      draw();
-    }
-  }
-}
-
-function botMove(){
-  stockfish.postMessage("position fen " + game.fen());
-  stockfish.postMessage("go depth 12");
-}
-
-function checkGameState(){
-  if(game.in_checkmate()){
-    statusEl.textContent = "Xeque-mate! " + (game.turn()==='w' ? "Pretas venceram" : "Brancas venceram");
-  } else if(game.in_draw()){
-    statusEl.textContent = "Empate!";
-  } else if(game.in_check()){
-    statusEl.textContent = "Xeque!";
-  } else {
-    statusEl.textContent = "Sua vez";
-  }
-}
-
-statusEl.textContent = "Sua vez (brancas)";
-draw();
-</script>
-
-</body>
-</html>
+  if(selected)
