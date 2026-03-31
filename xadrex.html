@@ -74,7 +74,8 @@ const IMG = {
 
 let selected = null;
 
-const stockfish = new Worker("stockfish.js");
+// usar Stockfish via CDN (corrige carregamento infinito)
+const stockfish = new Worker("https://cdn.jsdelivr.net/npm/stockfish/stockfish.js");
 
 stockfish.onmessage = function(e){
   if(e.data.startsWith("bestmove")){
@@ -119,4 +120,55 @@ function draw(){
 function click(x,y){
   const square = "abcdefgh"[x] + (8-y);
 
-  if(selected)
+  if(selected){
+    const from = "abcdefgh"[selected.x] + (8-selected.y);
+
+    let move = game.move({
+      from: from,
+      to: square,
+      promotion: "q"
+    });
+
+    selected = null;
+    draw();
+
+    if(move){
+      checkGameState();
+      if(!game.game_over()){
+        statusEl.textContent = "Bot pensando...";
+        setTimeout(botMove, 200);
+      }
+    }
+
+  } else {
+    let piece = game.get(square);
+    if(piece && piece.color === "w"){
+      selected = {x,y};
+      draw();
+    }
+  }
+}
+
+function botMove(){
+  stockfish.postMessage("position fen " + game.fen());
+  stockfish.postMessage("go depth 12");
+}
+
+function checkGameState(){
+  if(game.in_checkmate()){
+    statusEl.textContent = "Xeque-mate! " + (game.turn()==='w' ? "Pretas venceram" : "Brancas venceram");
+  } else if(game.in_draw()){
+    statusEl.textContent = "Empate!";
+  } else if(game.in_check()){
+    statusEl.textContent = "Xeque!";
+  } else {
+    statusEl.textContent = "Sua vez";
+  }
+}
+
+statusEl.textContent = "Sua vez (brancas)";
+draw();
+</script>
+
+</body>
+</html>
