@@ -74,8 +74,7 @@ const IMG = {
 
 let selected = null;
 
-// usar Stockfish via CDN (corrige carregamento infinito)
-const stockfish = new Worker("https://cdn.jsdelivr.net/npm/stockfish/stockfish.js");
+const stockfish = new Worker("./stockfish.js");
 
 stockfish.onmessage = function(e){
   if(e.data.startsWith("bestmove")){
