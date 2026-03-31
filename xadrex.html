@@ -35,6 +35,9 @@ body {
 .selected {
   outline: 3px solid yellow;
 }
+
+.white-piece { color: white; }
+.black-piece { color: black; }
 </style>
 </head>
 
@@ -44,7 +47,6 @@ body {
 <div id="board"></div>
 <p id="status">Carregando...</p>
 
-<!-- chess.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 
 <script>
@@ -59,8 +61,7 @@ const P = {
 
 let selected = null;
 
-// 🔥 Stockfish funcionando (CDN confiável)
-const stockfish = new Worker("stockfish.js")
+const stockfish = new Worker("stockfish.js");
 
 stockfish.onmessage = function(e){
   if(e.data.startsWith("bestmove")){
@@ -71,7 +72,7 @@ stockfish.onmessage = function(e){
       promotion: "q"
     });
     draw();
-    statusEl.textContent = "Sua vez";
+    checkGameState();
   }
 };
 
@@ -88,6 +89,13 @@ function draw(){
       if(p){
         let k = p.color==="w"?p.type.toUpperCase():p.type;
         d.textContent = P[k];
+
+        // cor das peças
+        if(p.color === "w"){
+          d.classList.add("white-piece");
+        } else {
+          d.classList.add("black-piece");
+        }
       }
 
       if(selected && selected.x===x && selected.y===y){
@@ -116,8 +124,11 @@ function click(x,y){
     draw();
 
     if(move){
-      statusEl.textContent = "Bot pensando...";
-      setTimeout(botMove, 200);
+      checkGameState();
+      if(!game.game_over()){
+        statusEl.textContent = "Bot pensando...";
+        setTimeout(botMove, 200);
+      }
     }
 
   } else {
@@ -132,6 +143,18 @@ function click(x,y){
 function botMove(){
   stockfish.postMessage("position fen " + game.fen());
   stockfish.postMessage("go depth 12");
+}
+
+function checkGameState(){
+  if(game.in_checkmate()){
+    statusEl.textContent = "Xeque-mate! " + (game.turn()==='w' ? "Pretas venceram" : "Brancas venceram");
+  } else if(game.in_draw()){
+    statusEl.textContent = "Empate!";
+  } else if(game.in_check()){
+    statusEl.textContent = "Xeque!";
+  } else {
+    statusEl.textContent = "Sua vez";
+  }
 }
 
 statusEl.textContent = "Sua vez (brancas)";
