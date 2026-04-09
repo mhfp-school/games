@@ -2,14 +2,14 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>FPS 3D COM IA (YUKA)</title>
+<title>FPS 3D DECENTE</title>
 <style>
-body { margin:0; overflow:hidden; }
+body { margin:0; overflow:hidden; background:black; }
 #crosshair {
   position:fixed;
   top:50%; left:50%;
-  width:10px; height:10px;
-  margin-left:-5px; margin-top:-5px;
+  width:8px; height:8px;
+  margin-left:-4px; margin-top:-4px;
   border:2px solid white;
   border-radius:50%;
 }
@@ -22,24 +22,80 @@ body { margin:0; overflow:hidden; }
 <script src="yuka.min.js"></script>
 
 <script>
-// ===== THREE SETUP =====
-let scene = new THREE.Scene();
-let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-let renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+// ===== SETUP =====
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202030);
 
-// chão
-let floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(50,50),
-  new THREE.MeshBasicMaterial({color:0x222244, side:THREE.DoubleSide})
-);
-floor.rotation.x = Math.PI/2;
-scene.add(floor);
-
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
 camera.position.set(0,1.8,5);
 
-// ===== POINTER LOCK (FPS REAL) =====
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// ===== LUZ =====
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(10,20,10);
+light.castShadow = true;
+scene.add(light);
+
+const ambient = new THREE.AmbientLight(0x404040);
+scene.add(ambient);
+
+// ===== CHÃO =====
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(100,100),
+  new THREE.MeshStandardMaterial({color:0x303050})
+);
+floor.rotation.x = -Math.PI/2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// ===== PAREDES =====
+let walls = [];
+for(let i=0;i<15;i++){
+  let wall = new THREE.Mesh(
+    new THREE.BoxGeometry(3,3,3),
+    new THREE.MeshStandardMaterial({color:0x888888})
+  );
+  wall.position.set((Math.random()-0.5)*40,1.5,(Math.random()-0.5)*40);
+  wall.castShadow = true;
+  wall.receiveShadow = true;
+  scene.add(wall);
+  walls.push(wall);
+}
+
+// ===== BOT =====
+const botMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(1,2,1),
+  new THREE.MeshStandardMaterial({color:0xff0000})
+);
+botMesh.castShadow = true;
+scene.add(botMesh);
+
+// ===== YUKA =====
+const entityManager = new YUKA.EntityManager();
+const time = new YUKA.Time();
+
+const bot = new YUKA.Vehicle();
+bot.maxSpeed = 4;
+
+const target = new YUKA.GameEntity();
+
+entityManager.add(bot);
+entityManager.add(target);
+
+const seek = new YUKA.SeekBehavior(target.position);
+bot.steering.add(seek);
+
+bot.setRenderComponent(botMesh, (entity, renderComponent)=>{
+  renderComponent.position.copy(entity.position);
+});
+
+bot.position.set(5,0,0);
+
+// ===== POINTER LOCK =====
 document.body.addEventListener("click", ()=>{
   document.body.requestPointerLock();
 });
@@ -55,91 +111,60 @@ document.addEventListener("mousemove", e=>{
   }
 });
 
-// ===== CONTROLES =====
+// ===== MOVIMENTO CORRETO =====
 let keys = {};
-document.addEventListener("keydown", e=>keys[e.key]=true);
-document.addEventListener("keyup", e=>keys[e.key]=false);
+document.addEventListener("keydown", e=>keys[e.key.toLowerCase()]=true);
+document.addEventListener("keyup", e=>keys[e.key.toLowerCase()]=false);
 
-// ===== BOT =====
-let botMesh = new THREE.Mesh(
-  new THREE.BoxGeometry(1,2,1),
-  new THREE.MeshBasicMaterial({color:0xff0000})
-);
-scene.add(botMesh);
+function move(){
+  let speed = 0.15;
 
-// ===== YUKA =====
-let entityManager = new YUKA.EntityManager();
-let time = new YUKA.Time();
+  let forward = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+  let right = new THREE.Vector3(Math.sin(yaw - Math.PI/2),0,Math.cos(yaw - Math.PI/2));
 
-let bot = new YUKA.Vehicle();
-bot.maxSpeed = 3;
+  if(keys['w']) camera.position.add(forward.clone().multiplyScalar(speed));
+  if(keys['s']) camera.position.add(forward.clone().multiplyScalar(-speed));
+  if(keys['a']) camera.position.add(right.clone().multiplyScalar(-speed));
+  if(keys['d']) camera.position.add(right.clone().multiplyScalar(speed));
 
-let target = new YUKA.GameEntity();
+  camera.rotation.order = "YXZ";
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+}
 
-entityManager.add(bot);
-entityManager.add(target);
-
-let seek = new YUKA.SeekBehavior(target.position);
-bot.steering.add(seek);
-
-bot.setRenderComponent(botMesh, (entity, renderComponent)=>{
-  renderComponent.position.copy(entity.position);
-});
-
-// posição inicial
-bot.position.set(5,0,0);
-
-// ===== TIRO (RAYCAST FPS) =====
-let raycaster = new THREE.Raycaster();
+// ===== TIRO (RAYCAST) =====
+const raycaster = new THREE.Raycaster();
 
 document.addEventListener("click", ()=>{
   if(document.pointerLockElement !== document.body) return;
 
-  let direction = new THREE.Vector3();
-  camera.getWorldDirection(direction);
+  let dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
 
-  raycaster.set(camera.position, direction);
+  raycaster.set(camera.position, dir);
   let hit = raycaster.intersectObject(botMesh);
 
   if(hit.length > 0){
-    alert("Você matou o bot!");
+    alert("Matou o bot");
     location.reload();
   }
 });
 
-// ===== BOT ATIRA =====
+// ===== BOT TIRO =====
 function botShoot(){
   if(Math.random() < 0.01){
-    let dx = camera.position.x - bot.position.x;
-    let dz = camera.position.z - bot.position.z;
-    let dist = Math.sqrt(dx*dx+dz*dz);
-
-    if(dist < 15){
-      if(Math.random() < 0.5){
-        alert("Bot te matou!");
-        location.reload();
-      }
+    let dist = camera.position.distanceTo(bot.position);
+    if(dist < 20 && Math.random() < 0.5){
+      alert("Você morreu");
+      location.reload();
     }
   }
 }
 
 // ===== UPDATE =====
 function update(){
-  // movimento FPS correto
-  let speed = 0.1;
-  let forward = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
-  let right = new THREE.Vector3(Math.sin(yaw-Math.PI/2),0,Math.cos(yaw-Math.PI/2));
+  move();
 
-  if(keys["w"]) camera.position.add(forward.clone().multiplyScalar(speed));
-  if(keys["s"]) camera.position.add(forward.clone().multiplyScalar(-speed));
-  if(keys["a"]) camera.position.add(right.clone().multiplyScalar(-speed));
-  if(keys["d"]) camera.position.add(right.clone().multiplyScalar(speed));
-
-  camera.rotation.order = "YXZ";
-  camera.rotation.y = yaw;
-  camera.rotation.x = pitch;
-
-  // YUKA update
   target.position.set(camera.position.x,0,camera.position.z);
   let delta = time.update().getDelta();
   entityManager.update(delta);
