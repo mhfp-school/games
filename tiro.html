@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>FPS 3D Simples</title>
+<style>
+body { margin:0; overflow:hidden; }
+#info { position:absolute; top:10px; left:10px; color:white; font-family:Arial; }
+</style>
+</head>
+<body>
+<div id="info">WASD mover | Mouse olhar | Clique atirar</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+let scene = new THREE.Scene();
+let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+let renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// chão
+let floorGeo = new THREE.PlaneGeometry(50,50);
+let floorMat = new THREE.MeshBasicMaterial({color:0x222244, side:THREE.DoubleSide});
+let floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = Math.PI/2;
+scene.add(floor);
+
+// player
+camera.position.y = 1.8;
+
+// bot
+let botGeo = new THREE.BoxGeometry(1,2,1);
+let botMat = new THREE.MeshBasicMaterial({color:0xff0000});
+let bot = new THREE.Mesh(botGeo, botMat);
+bot.position.set(5,1,0);
+scene.add(bot);
+
+// paredes aleatórias
+for(let i=0;i<10;i++){
+  let wall = new THREE.Mesh(
+    new THREE.BoxGeometry(2,2,2),
+    new THREE.MeshBasicMaterial({color:0x888888})
+  );
+  wall.position.set((Math.random()-0.5)*30,1,(Math.random()-0.5)*30);
+  scene.add(wall);
+}
+
+// controles
+let keys = {};
+document.addEventListener("keydown", e=>keys[e.key]=true);
+document.addEventListener("keyup", e=>keys[e.key]=false);
+
+// mouse look
+let yaw = 0;
+document.body.addEventListener("mousemove", e=>{
+  yaw -= e.movementX * 0.002;
+});
+
+// tiro
+let bullets = [];
+document.addEventListener("click", ()=>{
+  let bullet = new THREE.Mesh(
+    new THREE.SphereGeometry(0.1),
+    new THREE.MeshBasicMaterial({color:0x00ffff})
+  );
+  bullet.position.copy(camera.position);
+  bullet.velocity = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw)).multiplyScalar(0.5);
+  scene.add(bullet);
+  bullets.push(bullet);
+});
+
+function update(){
+  // movimento
+  if(keys["w"]) camera.position.x += Math.sin(yaw)*0.1, camera.position.z += Math.cos(yaw)*0.1;
+  if(keys["s"]) camera.position.x -= Math.sin(yaw)*0.1, camera.position.z -= Math.cos(yaw)*0.1;
+  if(keys["a"]) camera.position.x += Math.sin(yaw+Math.PI/2)*0.1, camera.position.z += Math.cos(yaw+Math.PI/2)*0.1;
+  if(keys["d"]) camera.position.x += Math.sin(yaw-Math.PI/2)*0.1, camera.position.z += Math.cos(yaw-Math.PI/2)*0.1;
+
+  camera.rotation.y = yaw;
+
+  // bot segue player
+  let dx = camera.position.x - bot.position.x;
+  let dz = camera.position.z - bot.position.z;
+  let dist = Math.sqrt(dx*dx + dz*dz);
+  if(dist > 1){
+    bot.position.x += dx/dist * 0.03;
+    bot.position.z += dz/dist * 0.03;
+  }
+
+  // balas
+  bullets.forEach(b=>{
+    b.position.add(b.velocity);
+
+    // colisão bot
+    if(b.position.distanceTo(bot.position) < 1){
+      alert("Você matou o bot!");
+      location.reload();
+    }
+  });
+
+  // bot mata player
+  if(camera.position.distanceTo(bot.position) < 1.5){
+    alert("Bot te matou!");
+    location.reload();
+  }
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  update();
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>
