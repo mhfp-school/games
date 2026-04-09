@@ -12,6 +12,7 @@ body { margin:0; overflow:hidden; }
 <div id="info">WASD mover | Mouse olhar | Clique atirar</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="yuka.min.js"></script>
 
 <script>
 let scene = new THREE.Scene();
@@ -80,14 +81,69 @@ function update(){
 
   camera.rotation.y = yaw;
 
-  // bot segue player
-  let dx = camera.position.x - bot.position.x;
-  let dz = camera.position.z - bot.position.z;
-  let dist = Math.sqrt(dx*dx + dz*dz);
-  if(dist > 1){
-    bot.position.x += dx/dist * 0.03;
-    bot.position.z += dz/dist * 0.03;
+  // IA COM YUKA (mais avançada)
+let entityManager = new YUKA.EntityManager();
+let time = new YUKA.Time();
+
+let botEntity = new YUKA.Vehicle();
+botEntity.maxSpeed = 2;
+
+let target = new YUKA.GameEntity();
+
+entityManager.add(botEntity);
+entityManager.add(target);
+
+let seekBehavior = new YUKA.SeekBehavior(target.position);
+botEntity.steering.add(seekBehavior);
+
+function sync(){
+  bot.position.copy(botEntity.position);
+}
+
+botEntity.setRenderComponent(bot, sync);
+
+function updateYuka(){
+  let delta = time.update().getDelta();
+
+  // player vira alvo
+  target.position.set(camera.position.x, 0, camera.position.z);
+
+  entityManager.update(delta);
+}
+
+// BOT atira com erro humano
+function botShoot(){
+  if(Math.random() < 0.015){
+    let dx = camera.position.x - bot.position.x;
+    let dz = camera.position.z - bot.position.z;
+
+    let dir = new THREE.Vector3(dx, 0, dz).normalize();
+    dir.x += (Math.random()-0.5)*0.4;
+    dir.z += (Math.random()-0.5)*0.4;
+
+    let bullet = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1),
+      new THREE.MeshBasicMaterial({color:0xff0000})
+    );
+    bullet.position.copy(bot.position);
+    bullet.velocity = dir.multiplyScalar(0.4);
+    scene.add(bullet);
+    bullets.push(bullet);
   }
+}
+
+// checar dano no player
+function checkBotHit(){
+  bullets.forEach(b=>{
+    if(b.material.color.getHex() === 0xff0000){
+      if(b.position.distanceTo(camera.position) < 1){
+        alert("Bot te matou!");
+        location.reload();
+      }
+    }
+  });
+}
+  // (tirado o kill por proximidade)
 
   // balas
   bullets.forEach(b=>{
