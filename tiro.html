@@ -2,19 +2,27 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>FPS 3D Simples</title>
+<title>FPS 3D COM IA (YUKA)</title>
 <style>
 body { margin:0; overflow:hidden; }
-#info { position:absolute; top:10px; left:10px; color:white; font-family:Arial; }
+#crosshair {
+  position:fixed;
+  top:50%; left:50%;
+  width:10px; height:10px;
+  margin-left:-5px; margin-top:-5px;
+  border:2px solid white;
+  border-radius:50%;
+}
 </style>
 </head>
 <body>
-<div id="info">WASD mover | Mouse olhar | Clique atirar</div>
+<div id="crosshair"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="yuka.min.js"></script>
 
 <script>
+// ===== THREE SETUP =====
 let scene = new THREE.Scene();
 let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
 let renderer = new THREE.WebGLRenderer();
@@ -22,145 +30,121 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // chão
-let floorGeo = new THREE.PlaneGeometry(50,50);
-let floorMat = new THREE.MeshBasicMaterial({color:0x222244, side:THREE.DoubleSide});
-let floor = new THREE.Mesh(floorGeo, floorMat);
+let floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(50,50),
+  new THREE.MeshBasicMaterial({color:0x222244, side:THREE.DoubleSide})
+);
 floor.rotation.x = Math.PI/2;
 scene.add(floor);
 
-// player
-camera.position.y = 1.8;
+camera.position.set(0,1.8,5);
 
-// bot
-let botGeo = new THREE.BoxGeometry(1,2,1);
-let botMat = new THREE.MeshBasicMaterial({color:0xff0000});
-let bot = new THREE.Mesh(botGeo, botMat);
-bot.position.set(5,1,0);
-scene.add(bot);
+// ===== POINTER LOCK (FPS REAL) =====
+document.body.addEventListener("click", ()=>{
+  document.body.requestPointerLock();
+});
 
-// paredes aleatórias
-for(let i=0;i<10;i++){
-  let wall = new THREE.Mesh(
-    new THREE.BoxGeometry(2,2,2),
-    new THREE.MeshBasicMaterial({color:0x888888})
-  );
-  wall.position.set((Math.random()-0.5)*30,1,(Math.random()-0.5)*30);
-  scene.add(wall);
-}
+let yaw = 0;
+let pitch = 0;
 
-// controles
+document.addEventListener("mousemove", e=>{
+  if(document.pointerLockElement === document.body){
+    yaw -= e.movementX * 0.002;
+    pitch -= e.movementY * 0.002;
+    pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+  }
+});
+
+// ===== CONTROLES =====
 let keys = {};
 document.addEventListener("keydown", e=>keys[e.key]=true);
 document.addEventListener("keyup", e=>keys[e.key]=false);
 
-// mouse look
-let yaw = 0;
-document.body.addEventListener("mousemove", e=>{
-  yaw -= e.movementX * 0.002;
-});
+// ===== BOT =====
+let botMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(1,2,1),
+  new THREE.MeshBasicMaterial({color:0xff0000})
+);
+scene.add(botMesh);
 
-// tiro
-let bullets = [];
-document.addEventListener("click", ()=>{
-  let bullet = new THREE.Mesh(
-    new THREE.SphereGeometry(0.1),
-    new THREE.MeshBasicMaterial({color:0x00ffff})
-  );
-  bullet.position.copy(camera.position);
-  bullet.velocity = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw)).multiplyScalar(0.5);
-  scene.add(bullet);
-  bullets.push(bullet);
-});
-
-function update(){
-  // movimento
-  if(keys["w"]) camera.position.x += Math.sin(yaw)*0.1, camera.position.z += Math.cos(yaw)*0.1;
-  if(keys["s"]) camera.position.x -= Math.sin(yaw)*0.1, camera.position.z -= Math.cos(yaw)*0.1;
-  if(keys["a"]) camera.position.x += Math.sin(yaw+Math.PI/2)*0.1, camera.position.z += Math.cos(yaw+Math.PI/2)*0.1;
-  if(keys["d"]) camera.position.x += Math.sin(yaw-Math.PI/2)*0.1, camera.position.z += Math.cos(yaw-Math.PI/2)*0.1;
-
-  camera.rotation.y = yaw;
-
-  // IA COM YUKA (mais avançada)
+// ===== YUKA =====
 let entityManager = new YUKA.EntityManager();
 let time = new YUKA.Time();
 
-let botEntity = new YUKA.Vehicle();
-botEntity.maxSpeed = 2;
+let bot = new YUKA.Vehicle();
+bot.maxSpeed = 3;
 
 let target = new YUKA.GameEntity();
 
-entityManager.add(botEntity);
+entityManager.add(bot);
 entityManager.add(target);
 
-let seekBehavior = new YUKA.SeekBehavior(target.position);
-botEntity.steering.add(seekBehavior);
+let seek = new YUKA.SeekBehavior(target.position);
+bot.steering.add(seek);
 
-function sync(){
-  bot.position.copy(botEntity.position);
-}
+bot.setRenderComponent(botMesh, (entity, renderComponent)=>{
+  renderComponent.position.copy(entity.position);
+});
 
-botEntity.setRenderComponent(bot, sync);
+// posição inicial
+bot.position.set(5,0,0);
 
-function updateYuka(){
-  let delta = time.update().getDelta();
+// ===== TIRO (RAYCAST FPS) =====
+let raycaster = new THREE.Raycaster();
 
-  // player vira alvo
-  target.position.set(camera.position.x, 0, camera.position.z);
+document.addEventListener("click", ()=>{
+  if(document.pointerLockElement !== document.body) return;
 
-  entityManager.update(delta);
-}
+  let direction = new THREE.Vector3();
+  camera.getWorldDirection(direction);
 
-// BOT atira com erro humano
+  raycaster.set(camera.position, direction);
+  let hit = raycaster.intersectObject(botMesh);
+
+  if(hit.length > 0){
+    alert("Você matou o bot!");
+    location.reload();
+  }
+});
+
+// ===== BOT ATIRA =====
 function botShoot(){
-  if(Math.random() < 0.015){
+  if(Math.random() < 0.01){
     let dx = camera.position.x - bot.position.x;
     let dz = camera.position.z - bot.position.z;
+    let dist = Math.sqrt(dx*dx+dz*dz);
 
-    let dir = new THREE.Vector3(dx, 0, dz).normalize();
-    dir.x += (Math.random()-0.5)*0.4;
-    dir.z += (Math.random()-0.5)*0.4;
-
-    let bullet = new THREE.Mesh(
-      new THREE.SphereGeometry(0.1),
-      new THREE.MeshBasicMaterial({color:0xff0000})
-    );
-    bullet.position.copy(bot.position);
-    bullet.velocity = dir.multiplyScalar(0.4);
-    scene.add(bullet);
-    bullets.push(bullet);
-  }
-}
-
-// checar dano no player
-function checkBotHit(){
-  bullets.forEach(b=>{
-    if(b.material.color.getHex() === 0xff0000){
-      if(b.position.distanceTo(camera.position) < 1){
+    if(dist < 15){
+      if(Math.random() < 0.5){
         alert("Bot te matou!");
         location.reload();
       }
     }
-  });
-}
-  // (tirado o kill por proximidade)
-
-  // balas
-  bullets.forEach(b=>{
-    b.position.add(b.velocity);
-
-    // colisão bot
-    if(b.position.distanceTo(bot.position) < 1){
-      alert("Você matou o bot!");
-      location.reload();
-    }
-  });
-
-  // bot mata player
-  if(camera.position.distanceTo(bot.position) < 1.5){
-    alert("Bot te matou!");
-    location.reload();
   }
+}
+
+// ===== UPDATE =====
+function update(){
+  // movimento FPS correto
+  let speed = 0.1;
+  let forward = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+  let right = new THREE.Vector3(Math.sin(yaw-Math.PI/2),0,Math.cos(yaw-Math.PI/2));
+
+  if(keys["w"]) camera.position.add(forward.clone().multiplyScalar(speed));
+  if(keys["s"]) camera.position.add(forward.clone().multiplyScalar(-speed));
+  if(keys["a"]) camera.position.add(right.clone().multiplyScalar(-speed));
+  if(keys["d"]) camera.position.add(right.clone().multiplyScalar(speed));
+
+  camera.rotation.order = "YXZ";
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  // YUKA update
+  target.position.set(camera.position.x,0,camera.position.z);
+  let delta = time.update().getDelta();
+  entityManager.update(delta);
+
+  botShoot();
 }
 
 function animate(){
